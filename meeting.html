@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Denn - Zoom Participant</title>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            color: #fff;
+            font-family: 'Segoe UI', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #zmmtg-root {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: none;
+            /* Hidden until joined */
+        }
+
+        #status-container {
+            z-index: 10;
+            text-align: center;
+            background: rgba(20, 20, 30, 0.8);
+            padding: 40px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #00f0ff;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+
+        #debug-log {
+            margin-top: 20px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            color: #0f0;
+            background: #111;
+            padding: 10px;
+            height: 200px;
+            width: 400px;
+            overflow-y: auto;
+            border: 1px solid #333;
+            border-radius: 5px;
+            text-align: left;
+        }
+    </style>
+    <!-- Import Zoom Web SDK 3.9.0 -->
+    <link type="text/css" rel="stylesheet" href="https://source.zoom.us/3.9.0/css/bootstrap.css" />
+    <link type="text/css" rel="stylesheet" href="https://source.zoom.us/3.9.0/css/react-select.css" />
+</head>
+
+<body>
+    <div id="status-container">
+        <h2 id="status">Initializing Denn...</h2>
+        <div id="debug-log">
+            <div>[SYSTEM] Boot sequence initiated...</div>
+        </div>
+    </div>
+
+    <!-- Zoom SDK Root -->
+    <div id="zmmtg-root"></div>
+
+    <!-- Zoom SDK Scripts (3.9.0) -->
+    <script src="https://source.zoom.us/3.9.0/lib/vendor/react.min.js"></script>
+    <script src="https://source.zoom.us/3.9.0/lib/vendor/react-dom.min.js"></script>
+    <script src="https://source.zoom.us/3.9.0/lib/vendor/redux.min.js"></script>
+    <script src="https://source.zoom.us/3.9.0/lib/vendor/redux-thunk.min.js"></script>
+    <script src="https://source.zoom.us/3.9.0/lib/vendor/lodash.min.js"></script>
+    <script src="https://source.zoom.us/3.9.0/lib/av/1502_js_media.min.js"></script>
+    <script src="https://source.zoom.us/3.9.0/lib/zoom-meeting-3.9.0.min.js"></script>
+
+    <script>
+        const debugLog = document.getElementById('debug-log');
+        const statusDiv = document.getElementById('status');
+        const rootDiv = document.getElementById('zmmtg-root');
+        const statusContainer = document.getElementById('status-container');
+
+        function logToScreen(msg, type = 'INFO') {
+            const div = document.createElement('div');
+            div.style.color = type === 'ERROR' ? '#ff5555' : (type === 'SUCCESS' ? '#00f0ff' : '#00ff00');
+            div.innerText = `[${new Date().toLocaleTimeString()}] [${type}] ${msg}`;
+            debugLog.appendChild(div);
+            debugLog.scrollTop = debugLog.scrollHeight;
+            console.log(`[${type}] ${msg}`);
+        }
+
+        window.onerror = function (message, source, lineno, colno, error) {
+            logToScreen(`${message} at ${source}:${lineno}`, 'ERROR');
+        };
+
+        logToScreen("Meeting script loaded. Checking SDK...");
+
+        try {
+            const { ipcRenderer } = require('electron');
+            logToScreen("Electron IPC ready.", 'SUCCESS');
+
+            // Check if ZoomMtg is defined
+            if (typeof ZoomMtg === 'undefined') {
+                throw new Error("ZoomMtg is not defined. SDK failed to load.");
+            }
+
+            ZoomMtg.setZoomJSLib('https://source.zoom.us/3.9.0/lib', '/av');
+            ZoomMtg.preLoadWasm();
+            ZoomMtg.prepareWebSDK();
+            logToScreen("Zoom SDK 3.9.0 prepared.", 'SUCCESS');
+
+            ipcRenderer.on('join-meeting', (event, data) => {
+                logToScreen(`Received join-meeting event for ${data.meetingNumber}`);
+                const { signature, meetingNumber, password, sdkKey, userName, userEmail } = data;
+
+                statusDiv.innerText = `Joining Meeting ${meetingNumber}...`;
+
+                ZoomMtg.init({
+                    leaveUrl: 'about:blank',
+                    success: (success) => {
+                        logToScreen('ZoomMtg init success', 'SUCCESS');
+                        ZoomMtg.join({
+                            signature: signature,
+                            meetingNumber: meetingNumber,
+                            userName: userName,
+                            sdkKey: sdkKey,
+                            userEmail: userEmail || "",
+                            passWord: password,
+                            success: (success) => {
+                                logToScreen('ZoomMtg join success', 'SUCCESS');
+                                statusDiv.innerText = "Connected.";
+                                ipcRenderer.send('meeting-connected');
+
+                                // Show Zoom UI, hide status container after a delay
+                                setTimeout(() => {
+                                    statusContainer.style.display = 'none';
+                                    rootDiv.style.display = 'block';
+                                }, 2000);
+                            },
+                            error: (error) => {
+                                logToScreen(`ZoomMtg join error: ${JSON.stringify(error)}`, 'ERROR');
+                                statusDiv.innerText = `Error: ${error.result}`;
+                            }
+                        });
+                    },
+                    error: (error) => {
+                        logToScreen(`ZoomMtg init error: ${JSON.stringify(error)}`, 'ERROR');
+                        statusDiv.innerText = `Init Error: ${error.result}`;
+                    }
+                });
+            });
+        } catch (e) {
+            logToScreen(`Critical Error: ${e.message}`, 'ERROR');
+            statusDiv.innerText = "System Failure";
+            statusDiv.style.color = "#ff5555";
+        }
+    </script>
+</body>
+
+</html>

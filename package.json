@@ -1,0 +1,29 @@
+{
+  "name": "miniclay-ai",
+  "version": "1.0.0",
+  "description": "Invisible AI Co-founder for Zoom",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [
+    "electron",
+    "ai",
+    "zoom",
+    "assistant"
+  ],
+  "author": "Antigravity",
+  "license": "ISC",
+  "dependencies": {
+    "@deepgram/sdk": "^3.1.0",
+    "@zoom/meetingsdk": "^3.1.0",
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1",
+    "elevenlabs-node": "^1.2.0",
+    "openai": "^4.0.0",
+    "ws": "^8.14.0"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0"
+  }
+}
